@@ -42,12 +42,9 @@ namespace AirPark
                     airparked = true;
                 }
             }
-            //if ((vessel.GetWorldPos3D() - FlightGlobals.ActiveVessel.GetWorldPos3D()).magnitude < 2000.0f && airparked == false && !vessel.isActiveVessel)
-            if (airparked == false && !vessel.isActiveVessel)
+            if (airparked == false && !vessel.isActiveVessel && vessel.situation == Vessel.Situations.FLYING)
             {
                 vessel.GoOffRails();
-                //vessel.Landed = false;
-                //vessel.situation = Vessel.Situations.FLYING;
             }
             if (airparked == true)
             {
