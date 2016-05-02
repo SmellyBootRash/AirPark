@@ -5,3 +5,5 @@
 /obj/Debug
 /bin/Debug
 /.vs/AirPark/v14
+/obj/Release
+/bin/Release
