@@ -22,8 +22,28 @@ namespace AirPark
 		{
 			if (state != StartState.Editor)
 			{
+				InitBaseState();
+			}
+		}
+
+		private void InitBaseState()
+		{
+			if (vessel != null)
+			{
 				ParkPosition = vessel.GetWorldPos3D();
 				part.force_activate();
+				RememberPreviousState();
+			}
+		}
+
+		private void RememberPreviousState()
+		{
+			if (previousState != Vessel.Situations.LANDED)
+			{
+				// don't overwrite the previous state
+			}
+			else
+			{
 				previousState = vessel.situation;
 			}
 		}
@@ -47,7 +67,6 @@ namespace AirPark
 					vessel.GoOffRails();
 					vessel.Landed = false;
 					vessel.situation = previousState;
-					vessel.SetWorldVelocity(ParkVelocity - Krakensbane.GetFrameVelocity());
 				}
 				// if we're farther than 2km, auto Park if needed
 				if ((vessel.GetWorldPos3D() - FlightGlobals.ActiveVessel.GetWorldPos3D()).magnitude > 2000.0f && (!Parked))
@@ -63,7 +82,6 @@ namespace AirPark
 			}
 			if (Parked)
 			{
-				vessel.SetPosition(ParkPosition);
 				vessel.SetWorldVelocity(zeroVector);
 				vessel.acceleration = zeroVector;
 				vessel.angularVelocity = zeroVector;
@@ -85,7 +103,6 @@ namespace AirPark
 				}
 				else
 				{
-					vessel.SetWorldVelocity(ParkVelocity);
 					vessel.situation = previousState;
 				}
 				Parked = !Parked;
@@ -103,7 +120,7 @@ namespace AirPark
 		{
 			ParkPosition = vessel.GetWorldPos3D();
 			ParkVelocity = vessel.GetSrfVelocity();
-			previousState = vessel.situation;
+			RememberPreviousState();
 		}
 	}
 }
