@@ -1,94 +1,185 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using UnityEngine;
 
 namespace AirPark
 {
     public class AirPark : PartModule
     {
-        Vector3 stationary = new Vector3(0.0f, 0.0f);
-        [KSPField(isPersistant = true, guiActive = false)]
-        Vector3 freezepos = new Vector3(0.0f, 0.0f);
-        [KSPField(isPersistant = true, guiActive = false)]
-        Vector3 freezevel = new Vector3(0.0f, 0.0f);
-        [KSPField(isPersistant = true, guiActive = true, guiName = "AirParked")]
-        Boolean airparked = false;
-        [KSPField(isPersistant = true, guiActive = true, guiName = "AutoPark")]
-        Boolean autopark = false;
+		[KSPField(isPersistant = true, guiActive = true, guiName = "AirParked")]
+		Boolean Parked;
+		[KSPField(isPersistant = true, guiActive = true, guiName = "Auto UnPark")]
+		Boolean autoPark;
 
-        public override void OnFixedUpdate()
-        {
-            if (vessel.situation == Vessel.Situations.ORBITING || vessel.situation == Vessel.Situations.SUB_ORBITAL)
-            {
-                autopark = false;
-            }
-            if (!vessel.isActiveVessel && autopark)
-            {
-                freezepos = vessel.GetWorldPos3D();
-                if ((vessel.GetWorldPos3D() - FlightGlobals.ActiveVessel.GetWorldPos3D()).magnitude < 1500.0f && airparked == true)
-                {
-                    airparked = false;
-                    vessel.GoOffRails();
-                    vessel.Landed = false;
-                    vessel.situation = Vessel.Situations.FLYING;
-                    vessel.SetWorldVelocity(freezevel - Krakensbane.GetFrameVelocity());
-                }
-                if ((vessel.GetWorldPos3D() - FlightGlobals.ActiveVessel.GetWorldPos3D()).magnitude > 2000.0f && airparked == false)
-                {
-                    freezepos = vessel.GetWorldPos3D();
-                    freezevel = vessel.GetSrfVelocity();
-                    airparked = true;
-                }
-            }
-            if (airparked == false && !vessel.isActiveVessel && vessel.situation == Vessel.Situations.FLYING)
-            {
-                vessel.GoOffRails();
-            }
-            if (airparked == true)
-            {
-                vessel.SetWorldVelocity(stationary);
-                vessel.acceleration = stationary;
-                vessel.angularVelocity = stationary;
-                vessel.situation = Vessel.Situations.LANDED;
-                vessel.CoriolisAcc = stationary;
-                vessel.gForce = stationary;
-                vessel.Landed = true;
-                vessel.SetPosition(freezepos);
-            }
-        }
-        public override void OnStart(StartState state)
-        {
-            if (state != StartState.Editor)
-            {
-                part.force_activate();
-                freezepos = vessel.GetWorldPos3D();
-            }
+		[KSPField(isPersistant = true, guiActive = false)]
+		private Vector3 ParkPosition = new Vector3(0f, 0f, 0f);
+		[KSPField(isPersistant = true, guiActive = false)]
+		private Vector3 ParkVelocity = new Vector3(0f, 0f, 0f);
+		[KSPField(isPersistant = true, guiActive = false)]
+		private Vector3 ParkAcceleration = new Vector3(0f, 0f, 0f);
+		[KSPField(isPersistant = true, guiActive = false)]
+		private Vector3 ParkAngularVelocity = new Vector3(0f, 0f, 0f);
 
-        } 
-        [KSPEvent(guiActive = true, guiName = "Toggle Airpark")]
-        public void ToggleAirPark()
-        {
-            if (vessel.situation != Vessel.Situations.ORBITING && vessel.situation != Vessel.Situations.SUB_ORBITAL)
-            {
-                if (airparked == false)
-                {
-                    airparked = true;
-                    freezepos = vessel.GetWorldPos3D();
-                    freezevel = vessel.GetSrfVelocity();
-                }
-                else
-                {
-                    airparked = false;
-                    vessel.SetWorldVelocity(freezevel);
-                }
-            }
-        }
-        [KSPEvent(guiActive = true, guiName = "Toggle AutoPark")]
-        public void ToggleAutoPark()
-        {
-            autopark = !autopark;
-        }
-    }
+		[KSPField(isPersistant = true, guiActive = false)]
+		Vessel.Situations previousState = Vessel.Situations.LANDED;
+
+		//have you ever clicked "AirParked"? Rember to keep interesting things from happening
+		[KSPField(isPersistant = true, guiActive = false)]
+		public bool isActive = false;
+
+		private static Vector3 zeroVector = new Vector3(0f, 0f, 0f);
+
+		public override void OnStart(StartState state)
+		{
+			if (state != StartState.Editor)
+			{
+				InitBaseState();
+			}
+		}
+
+		private void InitBaseState()
+		{
+			if (vessel != null)
+			{
+				ParkPosition = vessel.transform.position;
+				part.force_activate();
+			}
+		}
+
+		public override void OnSave(ConfigNode node)
+		{
+			base.OnSave(node);
+			if(vessel != null)
+			{
+				ParkPosition = GetVesselPostion();
+			}
+		}
+
+		private void RememberPreviousState()
+		{
+			if (!Parked && previousState != Vessel.Situations.LANDED)
+			{
+				previousState = vessel.situation;
+			}
+		}
+
+		public override void OnFixedUpdate()
+		{
+			// can't Park if we're orbiting
+			if (vessel.situation == Vessel.Situations.SUB_ORBITAL || vessel.situation == Vessel.Situations.ORBITING)
+			{
+				autoPark = false;
+				Parked = false;
+			}
+			// if we're inactive, and autopark is set
+			if (!vessel.isActiveVessel && autoPark)
+			{
+				// if we're less than 1.5km from the active vessel and Parked, then wake up
+				if ((vessel.GetWorldPos3D() - FlightGlobals.ActiveVessel.GetWorldPos3D()).magnitude < 1500.0f && Parked)
+				{
+					vessel.GoOffRails();
+					RestoreVesselState();
+				}
+				// if we're farther than 2km, auto Park if needed
+				if ((vessel.GetWorldPos3D() - FlightGlobals.ActiveVessel.GetWorldPos3D()).magnitude > 2000.0f && (!Parked))
+				{
+					ParkVessel();
+				}
+			}
+			if (Parked)
+			{
+				ParkVessel();
+			}
+		}
+
+		private void RestoreVesselState()
+		{
+			if (isActive == false) { return; } //we only want to restore the state if you have parked somewhere intentionally
+			vessel.situation = previousState;
+			if (vessel.situation != Vessel.Situations.LANDED) { vessel.Landed = false; }
+			if (Parked) { Parked = false; }
+
+			FreezeVesselInPlace();
+
+			//Restore Velocity and Accleration
+			vessel.SetWorldVelocity(ParkVelocity);
+			vessel.acceleration = ParkAcceleration;
+			vessel.angularVelocity = ParkAngularVelocity;
+		}
+
+		[KSPEvent(guiActive = true, guiName = "Toggle Park")]
+		public void TogglePark()
+		{
+			// cannot Park in orbit or sub-orbit
+			if (vessel.situation != Vessel.Situations.SUB_ORBITAL && vessel.situation != Vessel.Situations.ORBITING)
+			{
+				if (!Parked)
+				{
+					ParkPosition = GetVesselPostion();
+
+					//we only want to remember the initial velocity, not subseqent updates by onFixedUpdate()
+					ParkVelocity = vessel.GetSrfVelocity();
+					ParkAcceleration = vessel.acceleration;
+					ParkAngularVelocity = vessel.angularVelocity;
+
+					ParkVessel();
+				}
+				else
+				{
+					RestoreVesselState();
+				}
+				isActive = true;
+			}
+		}
+
+
+		[KSPEvent(guiActive = true, guiName = "Toggle AutoPark")]
+		public void ToggleAutoPark()
+		{
+			autoPark = !autoPark;
+		}
+
+		private void ParkVessel()
+		{
+			RememberPreviousState();
+			FreezeVesselInPlace();
+
+			vessel.situation = Vessel.Situations.LANDED;
+			vessel.Landed = true;
+			Parked = true;
+		}
+
+		private void FreezeVesselInPlace()
+		{
+			vessel.SetWorldVelocity(zeroVector);
+			vessel.acceleration = zeroVector;
+			vessel.angularVelocity = zeroVector;
+			vessel.geeForce = 0.0;
+			SetVesselPosition();
+
+		}
+
+		//Code Adapted from Hyperedit landing functions 
+		//https://github.com/Ezriilc/HyperEdit
+
+
+		private Vector3d GetVesselPostion()
+		{
+			double latitude = 0, longitude = 0, altitude = 0;
+			var pqs = vessel.mainBody.pqsController;
+			if (pqs == null)
+			{
+				Destroy(this);
+				return zeroVector;
+			}
+
+			altitude = pqs.GetSurfaceHeight(vessel.mainBody.GetRelSurfaceNVector(latitude, longitude)) - vessel.mainBody.Radius;
+
+			return vessel.mainBody.GetRelSurfacePosition(latitude, longitude, altitude);
+		}
+
+		private void SetVesselPosition()
+		{
+			vessel.orbitDriver.pos = ParkPosition;
+		}
+	}
 }

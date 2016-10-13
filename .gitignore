@@ -1,0 +1,9 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/obj/Debug
+/bin/Debug
+/.vs/AirPark/v14
+/obj/Release
+/bin/Release
